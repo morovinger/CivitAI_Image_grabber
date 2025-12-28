@@ -7,6 +7,41 @@ The script can only download where data is provided.
 The images are Downloaded into a folder with the name of the user, ModelID or the TAG <br /> 
 Second Level is the Model Name with which the image was generated.
 
+---
+
+## ⭐ NEW: Version 1.4 - Modular Edition
+
+The new `civitai_downloader_v2.py` script is a complete rewrite with:
+- **Modular architecture** - Split into clean, maintainable modules
+- **Fixed metadata extraction** - Handles CivitAI's new nested API structure
+- **Better rate limiting** - Automatic backoff when hitting API limits
+- **Improved prompt check** - Matches tag variations (star butterfly, starbutterfly, star_butterfly)
+
+### New Commands
+
+```bash
+# Tag search (finds models tagged with your tag)
+python civitai_downloader_v2.py --mode 3 --tags "star butterfly"
+
+# Skip prompt verification (download all images from tagged models)
+python civitai_downloader_v2.py --mode 3 --tags "star butterfly" --disable_prompt_check y
+
+# By username
+python civitai_downloader_v2.py --mode 1 --username "artist_name"
+
+# Interactive mode
+python civitai_downloader_v2.py
+```
+
+### Rate Limiting
+
+For large downloads, use a lower semaphore limit to avoid rate limiting:
+```bash
+python civitai_downloader_v2.py --mode 3 --tags "your tag" --semaphore_limit 3
+```
+
+---
+
 
 
 # Installation

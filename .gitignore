@@ -2,3 +2,11 @@
 image_downloads
 *sqlite.txt
 *.sqlite
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+civitai_downloader/__pycache__/
+
+*-modular.txt
