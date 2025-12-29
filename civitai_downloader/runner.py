@@ -14,7 +14,12 @@ from .utils import sanitize_tag_for_api, sanitize_tag_for_directory, clean_path_
 from .database import ImageTracker, NullTracker
 from .api import CivitaiAPI
 from .downloader import ImageDownloader
-from .scraper import CivitaiScraper
+from .meilisearch_client import (
+    CivitaiMeilisearchClient,
+    CivitaiMeilisearchAuthError,
+    CivitaiMeilisearchRateLimitError,
+)
+from .meilisearch_hit_transformer import MeilisearchHitTransformer
 
 
 class CivitaiRunner:
@@ -75,7 +80,7 @@ class CivitaiRunner:
             print("  3 = By model tag (searches models with tag, downloads their gallery images)")
             print("  4 = By model version ID")
             print("  5 = By direct image tag (searches ALL images tagged via public API)")
-            print("  6 = By website scraper (browser automation - finds 100k+ results)")
+            print("  6 = By website search (Meilisearch - no scrolling - finds 100k+ results)")
             choice = input("Choose mode: ").strip()
             if choice in ['1', '2', '3', '4', '5', '6']:
                 self.mode = choice
@@ -139,7 +144,7 @@ class CivitaiRunner:
             if self.args.tags:
                 return [t.strip() for t in self.args.tags.split(',') if t.strip()]
             elif self._interactive:
-                inp = input("Enter search term(s) for website scraper (comma-separated): ").strip()
+                inp = input("Enter search term(s) for website search (comma-separated): ").strip()
                 return [t.strip() for t in inp.split(',') if t.strip()]
         
         return []
@@ -411,14 +416,20 @@ class CivitaiRunner:
         self.logger.info("--- Finished Direct Image Tag Search Mode ---")
     
     async def _process_website_scraper(self, tags: List[str]) -> None:
-        """Process website scraper mode using Playwright."""
+        """Process website search mode using Meilisearch (no scrolling)."""
         option_folder = os.path.join(self.args.output_dir, "Website_Scraper_Search")
         os.makedirs(option_folder, exist_ok=True)
         
-        self.logger.info("--- Starting Website Scraper Mode ---")
-        
-        # Initialize scraper
-        scraper = CivitaiScraper(headless=True)
+        self.logger.info("--- Starting Website Search Mode ---")
+
+        try:
+            meili = CivitaiMeilisearchClient(timeout_s=self.args.timeout)
+        except CivitaiMeilisearchAuthError as e:
+            # Fail fast: this mode cannot work without the token.
+            self.logger.error(str(e))
+            print(f"\n{RED}ERROR:{RESET} {e}")
+            return
+        transformer = MeilisearchHitTransformer()
         
         for tag in tags:
             self.logger.info(f"Processing website search: {tag}")
@@ -426,14 +437,27 @@ class CivitaiRunner:
             tag_dir = os.path.join(option_folder, tag_dir_name)
             os.makedirs(tag_dir, exist_ok=True)
             
-            print(f"\nStarting browser automation for '{tag}'...")
-            print("  (This may take a moment to launch the browser and load results)")
+            print(f"\nStarting Meilisearch website-like search for '{tag}'...")
+            print("  (No browser scrolling; results are paginated via offset/limit)")
             
             total_downloaded = 0
             total_skipped = 0
+            seen_ids: set[str] = set()
             
             try:
-                async for item in scraper.search_and_intercept(tag):
+                async for hit in meili.iter_search_hits(tag, filters=["poi != true"]):
+                    item = transformer.transform(hit)
+                    if not item:
+                        continue
+
+                    image_id = item.get("id")
+                    if image_id is None:
+                        continue
+                    image_id_str = str(image_id)
+                    if image_id_str in seen_ids:
+                        continue
+                    seen_ids.add(image_id_str)
+
                     success, path, reason = await self.downloader.download_single_image(
                         item, tag_dir, tag=tag, check_prompt=False # Website results are already filtered
                     )
@@ -446,9 +470,12 @@ class CivitaiRunner:
                         self.downloader.record_skip(reason)
                         total_skipped += 1
                         
+            except CivitaiMeilisearchRateLimitError as e:
+                self.logger.error(str(e))
+                print(f"\n{YELLOW}WARNING:{RESET} {e}")
             except Exception as e:
-                self.logger.error(f"Scraper error: {e}")
-                print(f"  Scraper encountered an error: {e}")
+                self.logger.error(f"Website search error: {e}")
+                print(f"  Website search encountered an error: {e}")
             
             print(f"\n  Search '{tag}' complete: {total_downloaded} downloaded, {total_skipped} skipped")
             self.logger.info(f"Website search '{tag}': {total_downloaded} downloaded, {total_skipped} skipped")
@@ -456,7 +483,9 @@ class CivitaiRunner:
             if not self.args.no_sort:
                 await self.downloader.sort_images_by_model(tag_dir)
         
-        self.logger.info("--- Finished Website Scraper Mode ---")
+        self.logger.info("--- Finished Website Search Mode ---")
+
+        await meili.close()
 
     async def _cleanup(self) -> None:
         """Cleanup resources."""

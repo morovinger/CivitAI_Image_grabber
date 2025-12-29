@@ -26,7 +26,7 @@ python civitai_downloader_v2.py --mode 3 --tags "star butterfly"
 # Mode 5: Direct image tag search (downloads images, filters by prompt content)
 python civitai_downloader_v2.py --mode 5 --tags "star butterfly"
 
-# Mode 6: Website Scraper (Use browser to get 100k+ results)
+# Mode 6: Website Search (Meilisearch, no scrolling; 100k+ results)
 python civitai_downloader_v2.py --mode 6 --tags "star butterfly"
 
 # By username
@@ -36,28 +36,51 @@ python civitai_downloader_v2.py --mode 1 --username "artist_name"
 python civitai_downloader_v2.py
 ```
 
+> **Note:** Mode 6 uses CivitAI’s private Meilisearch endpoint (`search-new.civitai.com/multi-search`) with **offset/limit pagination** (no browser scrolling). You must set `CIVITAI_MEILI_BEARER_TOKEN` (see below).
+
 ### Mode 3 vs Mode 5 vs Mode 6
 
 | Mode | Description | Results |
 |------|-------------|---------|
 | Mode 3 | Searches for **models** tagged with your term, then downloads from those model galleries | Fewer results (e.g., 4,500 images from 9 models) |
 | Mode 5 | Searches images via `tag` API parameter, filters by prompt content | More results than Mode 3, filtered to relevant images |
-| Mode 6 | **Website Scraper**: Launches a browser to perform the search exactly like a user | **Best Results** (100k+ images), matches website exactly |
+| Mode 6 | **Website Search (Meilisearch)**: Calls the same endpoint the website uses (no scrolling) | **Best Results** (100k+ images), matches website search |
 
 ### Understanding API Limitations
 
-**Why can't we download all 100k+ images like the website shows?**
+**Why can Mode 6 get 100k+ results, but other modes may not?**
 
 The CivitAI website at `civitai.com/search/images?query=...` uses a **private Meilisearch API** (`search-new.civitai.com`) that:
 - Supports full-text search across image prompts and metadata
 - Returns 100,000+ results for popular searches
-- **Requires authentication** (bearer token) that's not publicly available
+- **Requires authentication** (bearer token)
 
 **Our Solution:**
 1.  **Mode 5** (Public API): Uses the official API. Good for quick searches, but limited results.
-2.  **Mode 6** (Scraper): Uses **Playwright** to launch a real browser, navigate to the search page, and intercept the data. This bypasses the API limitation by acting like a real user.
+2.  **Mode 6** (Website Search / Meilisearch): Calls `search-new.civitai.com/multi-search` directly (reliable offset/limit pagination). This matches the website search results, but requires a bearer token.
 
-**Recommendation:** Use **Mode 6** for the most comprehensive results.
+#### Mode 6 setup (bearer token)
+
+1. Open `civitai.com/search/images?query=...` in your browser (signed in if needed).
+2. Open DevTools → Network and find the request to `https://search-new.civitai.com/multi-search`.
+3. Copy the `Authorization` header value (`Bearer ...`).
+4. Set it in your environment as `CIVITAI_MEILI_BEARER_TOKEN`.
+
+**PowerShell (current session):**
+
+```powershell
+$env:CIVITAI_MEILI_BEARER_TOKEN = 'Bearer ...'
+python civitai_downloader_v2.py --mode 6 --tags "star butterfly"
+```
+
+**PowerShell (persist for your user):**
+
+```powershell
+setx CIVITAI_MEILI_BEARER_TOKEN "Bearer ..."
+```
+Close/reopen PowerShell after `setx`.
+
+**Recommendation:** Use **Mode 6** for the most comprehensive website-like results.
 
 ```bash
 python civitai_downloader_v2.py --mode 6 --tags "star butterfly"
@@ -66,6 +89,7 @@ python civitai_downloader_v2.py --mode 6 --tags "star butterfly"
 ### Rate Limiting
 
 For large downloads, use a lower semaphore limit to avoid rate limiting:
+
 ```bash
 python civitai_downloader_v2.py --mode 3 --tags "your tag" --semaphore_limit 3
 ```
@@ -120,7 +144,7 @@ the script will ask you to:
     *   Mode 3: `Enter tags (, separated):` + `Disable prompt check? (y/n) [default: n]:`
     *   Mode 4: `Enter model version ID(s) (numeric, , separated):`
     *   Mode 5: `Enter tag(s) for direct image search (, separated):` + `Disable prompt check? (y/n) [default: n]:`
-    *   Mode 6: `Enter search term(s) for website scraper (, separated):`
+    *   Mode 6: `Enter search term(s) for website search (, separated):`
 
 If you just hit enter it will use the Default values of that Option if it has a default value.  <br /> 
  <br /> 
@@ -269,7 +293,7 @@ image_downloads/
 │       ├── [ImageID].jpeg
 │       ├── [ImageID]_meta.txt
 │       └── [ImageID]_no_meta.txt
-└── Website_Scraper_Search/           # Mode 6 - Website Scraper
+└── Website_Scraper_Search/           # Mode 6 - Website Search (Meilisearch)
     └── [Sanitized_Tag_Name]/
         ├── [ImageID].jpeg
         ├── [ImageID]_meta.txt
