@@ -11,7 +11,7 @@ from .config import (
     RED, GREEN, YELLOW, RESET
 )
 from .utils import sanitize_tag_for_api, sanitize_tag_for_directory, clean_path_component
-from .database import ImageTracker
+from .database import ImageTracker, NullTracker
 from .api import CivitaiAPI
 from .downloader import ImageDownloader
 
@@ -34,6 +34,7 @@ class CivitaiRunner:
         self.quality: str = "SD"
         self.allow_redownload: bool = False
         self.disable_prompt_check: bool = False
+        self.skip_db_tracking: bool = True  # Default: skip tracking
         
         self.run_results: Dict[str, Dict[str, Any]] = {}
     
@@ -46,12 +47,22 @@ class CivitaiRunner:
             choice = input("Select quality (1=SD, 2=HD) [1]: ").strip()
             self.quality = "HD" if choice == '2' else "SD"
         
-        # Redownload
-        if self.args.redownload:
-            self.allow_redownload = self.args.redownload == 1
+        # Skip DB tracking
+        if self.args.skip_db_tracking:
+            self.skip_db_tracking = self.args.skip_db_tracking == 'y'
         elif self._interactive:
-            choice = input("Allow re-downloading tracked images? (1=Yes, 2=No) [2]: ").strip()
-            self.allow_redownload = choice == '1'
+            choice = input("Skip database image tracking? (y/n) [y]: ").strip().lower()
+            self.skip_db_tracking = choice != 'n'
+        
+        # Redownload (only relevant if tracking is enabled)
+        if not self.skip_db_tracking:
+            if self.args.redownload:
+                self.allow_redownload = self.args.redownload == 1
+            elif self._interactive:
+                choice = input("Allow re-downloading tracked images? (1=Yes, 2=No) [2]: ").strip()
+                self.allow_redownload = choice == '1'
+        else:
+            self.allow_redownload = True  # If tracking disabled, always allow download
         
         # Mode
         if self.args.mode:
@@ -130,7 +141,8 @@ class CivitaiRunner:
             return False
         
         try:
-            self.tracker = ImageTracker()
+            # Use NullTracker if tracking is disabled
+            self.tracker = NullTracker() if self.skip_db_tracking else ImageTracker()
             self.api = CivitaiAPI(
                 timeout=self.args.timeout,
                 semaphore_limit=self.args.semaphore_limit,
@@ -181,7 +193,10 @@ class CivitaiRunner:
     def _log_config(self) -> None:
         """Log current configuration."""
         self.logger.info("--- Initializing Downloader ---")
-        self.logger.info(f"Mode: {self.mode}, Quality: {self.quality}, Redownload: {'Yes' if self.allow_redownload else 'No'}")
+        self.logger.info(f"Mode: {self.mode}, Quality: {self.quality}")
+        self.logger.info(f"DB Tracking: {'Disabled' if self.skip_db_tracking else 'Enabled'}")
+        if not self.skip_db_tracking:
+            self.logger.info(f"Redownload: {'Yes' if self.allow_redownload else 'No'}")
         self.logger.info(f"Output Directory: {self.args.output_dir}")
         self.logger.info(f"Semaphore Limit: {self.args.semaphore_limit}, Timeout: {self.args.timeout}s")
         self.logger.info(f"Sorting: {'Disabled' if self.args.no_sort else 'Enabled'}")

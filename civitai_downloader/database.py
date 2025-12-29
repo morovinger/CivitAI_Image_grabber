@@ -9,6 +9,43 @@ from typing import Optional, List, Tuple
 from .config import DATABASE_FILENAME, SCRIPT_DIR
 
 
+class NullTracker:
+    """No-op tracker that skips all database operations."""
+    
+    def __init__(self):
+        """Initialize null tracker."""
+        self.logger = logging.getLogger('CivitaiDownloader')
+        self.logger.info("Database tracking disabled (NullTracker active)")
+    
+    def is_image_tracked(self, image_id: str, quality: str) -> bool:
+        """Always return False - never tracked."""
+        return False
+    
+    def mark_image_downloaded(
+        self,
+        image_id: str,
+        path: str,
+        quality: str,
+        tags: Optional[List[str]] = None,
+        url: Optional[str] = None,
+        checkpoint_name: Optional[str] = None
+    ) -> bool:
+        """No-op - don't track anything."""
+        return True
+    
+    def get_images_by_tag(self, tag: str) -> List[Tuple[str, str, str]]:
+        """Return empty list."""
+        return []
+    
+    def get_download_count(self) -> int:
+        """Return 0."""
+        return 0
+    
+    def close(self) -> None:
+        """No-op."""
+        pass
+
+
 class ImageTracker:
     """Handles SQLite database operations for tracking downloaded images."""
     

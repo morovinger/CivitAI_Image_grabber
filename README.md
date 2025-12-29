@@ -114,6 +114,7 @@ Provide arguments directly on the command line. Unspecified arguments will use t
 *   `--no_sort` (Disables model subfolder sorting, Default: False/Sorting enabled)
 *   `--max_path INT` (Default: 240)
 *   `--retries INT` (Default: 2)
+*   `--skip_db_tracking {y,n}` (Default: y - tracking disabled)
 
 ## Examples
 
@@ -225,7 +226,11 @@ image_downloads/
 
 ## Tracking Database (`tracking_database.sqlite`)
 
-This file replaces the old JSON file. It stores a record of each downloaded image/video, including its path, quality, download date, associated tags (from Mode 3), original URL, and extracted checkpoint name (from metadata). You can explore this file using tools like "DB Browser for SQLite".
+**Note:** Database tracking is **disabled by default** as of v1.4-modular. Use `--skip_db_tracking n` to enable it.
+
+This file stores a record of each downloaded image/video, including its path, quality, download date, associated tags (from Mode 3), original URL, and extracted checkpoint name (from metadata). You can explore this file using tools like "DB Browser for SQLite".
+
+When tracking is enabled, the `--redownload` option becomes relevant - it controls whether already-tracked images should be re-downloaded.
 
 **Migration Tool (`migrate_json_to_sqlite.py`)**
 

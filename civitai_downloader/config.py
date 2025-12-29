@@ -104,6 +104,8 @@ def parse_arguments() -> argparse.Namespace:
                         help="Approximate max length for file paths.")
     parser.add_argument("--retries", type=int, default=DEFAULT_RETRIES,
                         help="Number of retries for failures.")
+    parser.add_argument("--skip_db_tracking", choices=['y', 'n'], default='y',
+                        help="Skip database image tracking (y/n). Default: y (tracking disabled).")
     
     return parser.parse_args()
 
