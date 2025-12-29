@@ -24,7 +24,7 @@ class ImageDownloader:
         api: CivitaiAPI,
         tracker: ImageTracker,
         output_dir: str,
-        quality: str = "SD",
+        quality: str = "HD",
         allow_redownload: bool = False,
         max_path_length: int = DEFAULT_MAX_PATH_LENGTH,
         disable_sorting: bool = False

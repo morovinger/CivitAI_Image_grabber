@@ -193,7 +193,12 @@ class CivitaiAPI:
                 if attempt < self.retries:
                     await asyncio.sleep(2 ** attempt)
                     continue
-                self.logger.error(f"Failed to fetch image {url}: {e}")
+                
+                # Downgrade 500 errors to warning as they are often skippable
+                if e.response.status_code == 500:
+                    self.logger.warning(f"Failed to fetch image {url} (Server Error 500) - Skipping")
+                else:
+                    self.logger.error(f"Failed to fetch image {url}: {e}")
                 return None
                 
             except Exception as e:

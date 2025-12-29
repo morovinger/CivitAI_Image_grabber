@@ -20,17 +20,47 @@ The new `civitai_downloader_v2.py` script is a complete rewrite with:
 ### New Commands
 
 ```bash
-# Tag search (finds models tagged with your tag)
+# Mode 3: Model tag search (finds models tagged with your tag, downloads their galleries)
 python civitai_downloader_v2.py --mode 3 --tags "star butterfly"
 
-# Skip prompt verification (download all images from tagged models)
-python civitai_downloader_v2.py --mode 3 --tags "star butterfly" --disable_prompt_check y
+# Mode 5: Direct image tag search (downloads images, filters by prompt content)
+python civitai_downloader_v2.py --mode 5 --tags "star butterfly"
+
+# Mode 6: Website Scraper (Use browser to get 100k+ results)
+python civitai_downloader_v2.py --mode 6 --tags "star butterfly"
 
 # By username
 python civitai_downloader_v2.py --mode 1 --username "artist_name"
 
 # Interactive mode
 python civitai_downloader_v2.py
+```
+
+### Mode 3 vs Mode 5 vs Mode 6
+
+| Mode | Description | Results |
+|------|-------------|---------|
+| Mode 3 | Searches for **models** tagged with your term, then downloads from those model galleries | Fewer results (e.g., 4,500 images from 9 models) |
+| Mode 5 | Searches images via `tag` API parameter, filters by prompt content | More results than Mode 3, filtered to relevant images |
+| Mode 6 | **Website Scraper**: Launches a browser to perform the search exactly like a user | **Best Results** (100k+ images), matches website exactly |
+
+### Understanding API Limitations
+
+**Why can't we download all 100k+ images like the website shows?**
+
+The CivitAI website at `civitai.com/search/images?query=...` uses a **private Meilisearch API** (`search-new.civitai.com`) that:
+- Supports full-text search across image prompts and metadata
+- Returns 100,000+ results for popular searches
+- **Requires authentication** (bearer token) that's not publicly available
+
+**Our Solution:**
+1.  **Mode 5** (Public API): Uses the official API. Good for quick searches, but limited results.
+2.  **Mode 6** (Scraper): Uses **Playwright** to launch a real browser, navigate to the search page, and intercept the data. This bypasses the API limitation by acting like a real user.
+
+**Recommendation:** Use **Mode 6** for the most comprehensive results.
+
+```bash
+python civitai_downloader_v2.py --mode 6 --tags "star butterfly"
 ```
 
 ### Rate Limiting
@@ -80,16 +110,17 @@ python civit_image_downloader.py
 the script will ask you to:
 
 1.  `Enter timeout value (seconds) [default: 60]:`
-2.  `Choose image quality (1=SD, 2=HD) [default: 1]:`
+2.  `Choose image quality (1=SD, 2=HD) [default: 2]:`
 3.  `Allow re-downloading tracked items? (1=Yes, 2=No) [default: 2]:` 
-4.  `Choose mode (1=user, 2=model ID, 3=tag search, 4=model version ID):` 
+4.  `Choose mode (1=user, 2=model ID, 3=model tag search, 4=model version ID, 5=direct image tag search):` 
 5.  `Enter max concurrent downloads [default: 5]:` 
 6.  *(Mode-specific prompts):*
     *   Mode 1: `Enter username(s) (, separated):`
     *   Mode 2: `Enter model ID(s) (numeric, , separated):`
-    *   Mode 3: `Enter tags (, separated):`
-    *   Mode 3: `Disable prompt check? (y/n) [default: n]:` (Check if tag words must be in the image prompt)
+    *   Mode 3: `Enter tags (, separated):` + `Disable prompt check? (y/n) [default: n]:`
     *   Mode 4: `Enter model version ID(s) (numeric, , separated):`
+    *   Mode 5: `Enter tag(s) for direct image search (, separated):` + `Disable prompt check? (y/n) [default: n]:`
+    *   Mode 6: `Enter search term(s) for website scraper (, separated):`
 
 If you just hit enter it will use the Default values of that Option if it has a default value.  <br /> 
  <br /> 
@@ -103,8 +134,8 @@ Provide arguments directly on the command line. Unspecified arguments will use t
 *   `--timeout INT` (Default: 60)
 *   `--quality {1,2}` (1=SD, 2=HD, Default: SD)
 *   `--redownload {1,2}` (1=Yes, 2=No, Default: 2)
-*   `--mode {1,2,3,4}` (**Required**)
-*   `--tags TAGS` (Comma-separated, required for Mode 3)
+*   `--mode {1,2,3,4,5,6}` (**Required**)
+*   `--tags TAGS` (Comma-separated, required for Mode 3, 5, and 6)
 *   `--disable_prompt_check {y,n}` (Default: n)
 *   `--username USERNAMES` (Comma-separated, required for Mode 1)
 *   `--model_id IDS` (Comma-separated, numeric, required for Mode 2)
@@ -126,9 +157,13 @@ Provide arguments directly on the command line. Unspecified arguments will use t
     ```bash
     python civit_image_downloader.py --mode 2 --model_id "123, 456"
     ```
-*   Download SD images for tag "sci-fi", disabling prompt check, no redownloads:
+*   Download SD images for tag "sci-fi" (model-based search), disabling prompt check:
     ```bash
     python civit_image_downloader.py --mode 3 --tags "sci-fi" --disable_prompt_check y --redownload 2
+    ```
+*   Download ALL images tagged "star butterfly" using direct image search (Mode 5):
+    ```bash
+    python civit_image_downloader.py --mode 5 --tags "star butterfly" --disable_prompt_check y
     ```
 
 ## Mixed Mode
@@ -179,19 +214,28 @@ image_downloads/
 │       └── no_metadata/
 │           └── [ImageID].jpeg
 │           └── [ImageID]_no_meta.txt
-└── Model_Tag_Search/
-    └── [Sanitized_Tag_Name]/         # e.g., sci_fi_vehicle
-        ├── model_[ModelID]/          # Folder for each model found under the tag
-        │   ├── [Model Name Subfolder]/ # Sorting within model folder
+├── Model_Tag_Search/                 # Mode 3 - searches models, then their galleries
+│   └── [Sanitized_Tag_Name]/         # e.g., sci_fi_vehicle
+│       ├── model_[ModelID]/          # Folder for each model found under the tag
+│       │   ├── [Model Name Subfolder]/ # Sorting within model folder
+│       │   └── [ImageID].jpeg
+│       │   └── [ImageID]_meta.txt
+│       │   ├── invalid_metadata/
+│       │   └── [ImageID].jpeg
+│       │   └── [ImageID]_meta.txt
+│       │   └── no_metadata/
+│       │   └── [ImageID].jpeg
+│       │   └── [ImageID]_no_meta.txt
+│       └── summary_[Sanitized_Tag_Name]_[YYYYMMDD].csv 
+└── Direct_Tag_Search/                # Mode 5 - searches ALL images directly
+    └── [Sanitized_Tag_Name]/         # e.g., star_butterfly
+        ├── [Model Name Subfolder]/   # Sorted by model used to generate
         │   └── [ImageID].jpeg
         │   └── [ImageID]_meta.txt
-        │   ├── invalid_metadata/
+        ├── invalid_metadata/
         │   └── [ImageID].jpeg
-        │   └── [ImageID]_meta.txt
-        │   └── no_metadata/
-        │   └── [ImageID].jpeg
-        │   └── [ImageID]_no_meta.txt
-        └── summary_[Sanitized_Tag_Name]_[YYYYMMDD].csv 
+        └── no_metadata/
+            └── [ImageID].jpeg
 ```
 
 **With Sorting Disabled (`--no_sort`)**
@@ -213,13 +257,23 @@ image_downloads/
 │   └── modelVersion_[VersionID]/
 │       ├── [ImageID].jpeg
 │       └── ...
-└── Model_Tag_Search/
+├── Model_Tag_Search/                 # Mode 3
+│   └── [Sanitized_Tag_Name]/
+│       ├── model_[ModelID]/
+│       │   ├── [ImageID].jpeg
+│       │   ├── [ImageID]_meta.txt
+│       │   └── [ImageID]_no_meta.txt
+│       └── summary_[Sanitized_Tag_Name]_[YYYYMMDD].csv
+├── Direct_Tag_Search/                # Mode 5 - searches ALL images directly
+│   └── [Sanitized_Tag_Name]/         # e.g., star_butterfly
+│       ├── [ImageID].jpeg
+│       ├── [ImageID]_meta.txt
+│       └── [ImageID]_no_meta.txt
+└── Website_Scraper_Search/           # Mode 6 - Website Scraper
     └── [Sanitized_Tag_Name]/
-        ├── model_[ModelID]/
-        │   ├── [ImageID].jpeg
-        │   ├── [ImageID]_meta.txt
-        │   └── [ImageID]_no_meta.txt
-        └── summary_[Sanitized_Tag_Name]_[YYYYMMDD].csv # CSV still in tag folder
+        ├── [ImageID].jpeg
+        ├── [ImageID]_meta.txt
+        └── ...
 ```
 
 ---

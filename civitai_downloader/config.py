@@ -84,9 +84,9 @@ def parse_arguments() -> argparse.Namespace:
                         help="Image quality: 1=SD, 2=HD.")
     parser.add_argument("--redownload", type=int, choices=[1, 2], default=2,
                         help="Allow re-downloading tracked images: 1=Yes, 2=No.")
-    parser.add_argument("--mode", type=int, choices=[1, 2, 3, 4],
+    parser.add_argument("--mode", type=int, choices=[1, 2, 3, 4, 5, 6],
                         required=not sys.stdin.isatty(),
-                        help="Download mode: 1=user, 2=model ID, 3=tag search, 4=model version ID.")
+                        help="Download mode: 1=user, 2=model ID, 3=model tag search, 4=model version ID, 5=direct image tag search, 6=website scraper.")
     parser.add_argument("--tags", help="Tag(s) for Mode 3 (comma-separated).")
     parser.add_argument("--disable_prompt_check", choices=['y', 'n'], default='n',
                         help="Disable prompt check in tag mode (y/n).")

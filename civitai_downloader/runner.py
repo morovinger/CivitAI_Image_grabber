@@ -14,6 +14,7 @@ from .utils import sanitize_tag_for_api, sanitize_tag_for_directory, clean_path_
 from .database import ImageTracker, NullTracker
 from .api import CivitaiAPI
 from .downloader import ImageDownloader
+from .scraper import CivitaiScraper
 
 
 class CivitaiRunner:
@@ -71,10 +72,12 @@ class CivitaiRunner:
             print("\nDownload modes:")
             print("  1 = By username")
             print("  2 = By model ID")
-            print("  3 = By tag (searches models with tag, downloads their images)")
+            print("  3 = By model tag (searches models with tag, downloads their gallery images)")
             print("  4 = By model version ID")
+            print("  5 = By direct image tag (searches ALL images tagged via public API)")
+            print("  6 = By website scraper (browser automation - finds 100k+ results)")
             choice = input("Choose mode: ").strip()
-            if choice in ['1', '2', '3', '4']:
+            if choice in ['1', '2', '3', '4', '5', '6']:
                 self.mode = choice
             else:
                 print("Invalid mode selection.")
@@ -83,8 +86,8 @@ class CivitaiRunner:
             self.logger.error("Mode is required in non-interactive mode.")
             return False
         
-        # Prompt check (for tag mode)
-        if self.mode == '3':
+        # Prompt check (for tag modes 3 and 5)
+        if self.mode in ['3', '5']:
             if self.args.disable_prompt_check:
                 self.disable_prompt_check = self.args.disable_prompt_check == 'y'
             elif self._interactive:
@@ -124,6 +127,20 @@ class CivitaiRunner:
             elif self._interactive:
                 inp = input("Enter model version ID(s) (comma-separated): ").strip()
                 return [m.strip() for m in inp.split(',') if m.strip().isdigit()]
+        
+        elif self.mode == '5':
+            if self.args.tags:
+                return [t.strip() for t in self.args.tags.split(',') if t.strip()]
+            elif self._interactive:
+                inp = input("Enter tag(s) for direct image search (comma-separated): ").strip()
+                return [t.strip() for t in inp.split(',') if t.strip()]
+        
+        elif self.mode == '6':
+            if self.args.tags:
+                return [t.strip() for t in self.args.tags.split(',') if t.strip()]
+            elif self._interactive:
+                inp = input("Enter search term(s) for website scraper (comma-separated): ").strip()
+                return [t.strip() for t in inp.split(',') if t.strip()]
         
         return []
     
@@ -180,6 +197,10 @@ class CivitaiRunner:
                 await self._process_tags(identifiers)
             elif self.mode == '4':
                 await self._process_model_version_ids(identifiers)
+            elif self.mode == '5':
+                await self._process_direct_tag_search(identifiers)
+            elif self.mode == '6':
+                await self._process_website_scraper(identifiers)
             
             return True
             
@@ -344,6 +365,99 @@ class CivitaiRunner:
         
         self.logger.info("--- Finished Tag Search Mode ---")
     
+    async def _process_direct_tag_search(self, tags: List[str]) -> None:
+        """Process direct image tag search - queries images API directly with tag parameter.
+        
+        This mode searches for images that are directly tagged, not just images from
+        models tagged with the term. Results in significantly more images.
+        """
+        option_folder = os.path.join(self.args.output_dir, "Direct_Tag_Search")
+        os.makedirs(option_folder, exist_ok=True)
+        
+        self.logger.info("--- Starting Direct Image Tag Search Mode ---")
+        self.logger.info(f"Prompt check: {'Disabled' if self.disable_prompt_check else 'Enabled'}")
+        
+        for tag in tags:
+            self.logger.info(f"Processing direct tag search: {tag}")
+            tag_query = sanitize_tag_for_api(tag)
+            tag_dir_name = sanitize_tag_for_directory(tag)
+            tag_dir = os.path.join(option_folder, tag_dir_name)
+            os.makedirs(tag_dir, exist_ok=True)
+            
+            print(f"\nSearching for images tagged with '{tag_query}'...")
+            print("  (This searches images directly, not via models - may find 100k+ images)")
+            
+            total_downloaded = 0
+            total_skipped = 0
+            
+            async for item in self.api.iter_images_by_tag(tag_query):
+                success, path, reason = await self.downloader.download_single_image(
+                    item, tag_dir, tag=tag, check_prompt=not self.disable_prompt_check
+                )
+                if success:
+                    total_downloaded += 1
+                    if total_downloaded % 100 == 0:
+                        print(f"  Downloaded {total_downloaded} images so far...")
+                elif reason:
+                    self.downloader.record_skip(reason)
+                    total_skipped += 1
+            
+            print(f"\n  Tag '{tag}' complete: {total_downloaded} downloaded, {total_skipped} skipped")
+            self.logger.info(f"Direct tag search '{tag}': {total_downloaded} downloaded, {total_skipped} skipped")
+            
+            if not self.args.no_sort:
+                await self.downloader.sort_images_by_model(tag_dir)
+        
+        self.logger.info("--- Finished Direct Image Tag Search Mode ---")
+    
+    async def _process_website_scraper(self, tags: List[str]) -> None:
+        """Process website scraper mode using Playwright."""
+        option_folder = os.path.join(self.args.output_dir, "Website_Scraper_Search")
+        os.makedirs(option_folder, exist_ok=True)
+        
+        self.logger.info("--- Starting Website Scraper Mode ---")
+        
+        # Initialize scraper
+        scraper = CivitaiScraper(headless=True)
+        
+        for tag in tags:
+            self.logger.info(f"Processing website search: {tag}")
+            tag_dir_name = sanitize_tag_for_directory(tag)
+            tag_dir = os.path.join(option_folder, tag_dir_name)
+            os.makedirs(tag_dir, exist_ok=True)
+            
+            print(f"\nStarting browser automation for '{tag}'...")
+            print("  (This may take a moment to launch the browser and load results)")
+            
+            total_downloaded = 0
+            total_skipped = 0
+            
+            try:
+                async for item in scraper.search_and_intercept(tag):
+                    success, path, reason = await self.downloader.download_single_image(
+                        item, tag_dir, tag=tag, check_prompt=False # Website results are already filtered
+                    )
+                    
+                    if success:
+                        total_downloaded += 1
+                        if total_downloaded % 50 == 0:
+                            print(f"  Downloaded {total_downloaded} images so far...")
+                    elif reason:
+                        self.downloader.record_skip(reason)
+                        total_skipped += 1
+                        
+            except Exception as e:
+                self.logger.error(f"Scraper error: {e}")
+                print(f"  Scraper encountered an error: {e}")
+            
+            print(f"\n  Search '{tag}' complete: {total_downloaded} downloaded, {total_skipped} skipped")
+            self.logger.info(f"Website search '{tag}': {total_downloaded} downloaded, {total_skipped} skipped")
+            
+            if not self.args.no_sort:
+                await self.downloader.sort_images_by_model(tag_dir)
+        
+        self.logger.info("--- Finished Website Scraper Mode ---")
+
     async def _cleanup(self) -> None:
         """Cleanup resources."""
         self.logger.info("Run finalization steps...")
