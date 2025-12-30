@@ -106,6 +106,8 @@ def parse_arguments() -> argparse.Namespace:
                         help="Number of retries for failures.")
     parser.add_argument("--skip_db_tracking", choices=['y', 'n'], default='y',
                         help="Skip database image tracking (y/n). Default: y (tracking disabled).")
+    parser.add_argument("--no_meta", action='store_true',
+                        help="Skip creating _meta.txt files alongside images.")
     
     return parser.parse_args()
 

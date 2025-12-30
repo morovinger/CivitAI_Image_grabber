@@ -170,6 +170,7 @@ Provide arguments directly on the command line. Unspecified arguments will use t
 *   `--max_path INT` (Default: 240)
 *   `--retries INT` (Default: 2)
 *   `--skip_db_tracking {y,n}` (Default: y - tracking disabled)
+*   `--no_meta` (Skip creating _meta.txt files alongside images)
 
 ## Examples
 

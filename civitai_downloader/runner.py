@@ -177,7 +177,8 @@ class CivitaiRunner:
                 quality=self.quality,
                 allow_redownload=self.allow_redownload,
                 max_path_length=self.args.max_path,
-                disable_sorting=self.args.no_sort
+                disable_sorting=self.args.no_sort,
+                skip_metadata=self.args.no_meta
             )
         except Exception as e:
             self.logger.critical(f"Failed to initialize components: {e}")

@@ -27,7 +27,8 @@ class ImageDownloader:
         quality: str = "HD",
         allow_redownload: bool = False,
         max_path_length: int = DEFAULT_MAX_PATH_LENGTH,
-        disable_sorting: bool = False
+        disable_sorting: bool = False,
+        skip_metadata: bool = False
     ):
         """Initialize the downloader.
         
@@ -39,6 +40,7 @@ class ImageDownloader:
             allow_redownload: Whether to re-download tracked images
             max_path_length: Maximum path length
             disable_sorting: Disable sorting into model subfolders
+            skip_metadata: Skip creating _meta.txt files
         """
         self.logger = logging.getLogger('CivitaiDownloader')
         self.api = api
@@ -48,6 +50,7 @@ class ImageDownloader:
         self.allow_redownload = allow_redownload
         self.max_path_length = max_path_length
         self.disable_sorting = disable_sorting
+        self.skip_metadata = skip_metadata
         
         # Statistics
         self.stats = {
@@ -144,8 +147,9 @@ class ImageDownloader:
             self.logger.error(f"Failed to save image {image_id}: {e}")
             return False, None, f"Save failed: {e}"
         
-        # Save metadata
-        await self._save_metadata(item, target_dir, image_id_str)
+        # Save metadata (unless disabled)
+        if not self.skip_metadata:
+            await self._save_metadata(item, target_dir, image_id_str)
         
         # Track in database
         checkpoint_name = meta.get('Model', '') if meta else None
