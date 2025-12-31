@@ -20,6 +20,7 @@ from .meilisearch_client import (
     CivitaiMeilisearchRateLimitError,
 )
 from .meilisearch_hit_transformer import MeilisearchHitTransformer
+from .relevance.meilisearch_hit_relevance_filter import MeilisearchHitRelevanceFilter
 
 
 class CivitaiRunner:
@@ -430,7 +431,9 @@ class CivitaiRunner:
             self.logger.error(str(e))
             print(f"\n{RED}ERROR:{RESET} {e}")
             return
+        
         transformer = MeilisearchHitTransformer()
+        filter_ = MeilisearchHitRelevanceFilter()
         
         for tag in tags:
             self.logger.info(f"Processing website search: {tag}")
@@ -447,6 +450,11 @@ class CivitaiRunner:
             
             try:
                 async for hit in meili.iter_search_hits(tag, filters=["poi != true"]):
+                    # Pre-download filtering:
+                    is_relevant, reason = filter_.is_relevant(hit, tag)
+                    if not is_relevant:
+                        continue
+
                     item = transformer.transform(hit)
                     if not item:
                         continue
@@ -459,8 +467,10 @@ class CivitaiRunner:
                         continue
                     seen_ids.add(image_id_str)
 
+                    # Enable prompt check (Mode 6 uses prompt check now, unless disabled)
+                    # Use 'not self.disable_prompt_check' to respect user config
                     success, path, reason = await self.downloader.download_single_image(
-                        item, tag_dir, tag=tag, check_prompt=False # Website results are already filtered
+                        item, tag_dir, tag=tag, check_prompt=not self.disable_prompt_check
                     )
                     
                     if success:
@@ -523,4 +533,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

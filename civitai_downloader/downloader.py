@@ -14,6 +14,8 @@ from .utils import (
 )
 from .database import ImageTracker
 from .api import CivitaiAPI
+from .metadata.pillow_prompt_extractor import PillowPromptExtractor
+from .relevance.tag_text_matcher import TagTextMatcher
 
 
 class ImageDownloader:
@@ -103,9 +105,19 @@ class ImageDownloader:
         meta = extract_image_meta(item)
         prompt = meta.get('prompt', '')
         
-        # Check prompt contains tag if required
-        if check_prompt and tag and not check_prompt_contains_tag(prompt, tag):
-            return False, None, f"Prompt check failed: {tag}"
+        # Check prompt contains tag if required (Pre-download check)
+        prompt_verified_via_api = False
+        if check_prompt and tag:
+            matcher = TagTextMatcher()
+            if prompt and str(prompt).strip():
+                # If API has prompt, it MUST match.
+                if matcher.matches_text(prompt, tag):
+                    prompt_verified_via_api = True
+                else:
+                    return False, None, f"Prompt check failed (API): {tag}"
+            else:
+                 # API prompt missing, proceed to download and check later
+                 prompt_verified_via_api = False
         
         # Get image URL
         url = self._get_image_url(item)
@@ -116,6 +128,23 @@ class ImageDownloader:
         image_bytes = await self.api.fetch_image_bytes(url)
         if not image_bytes:
             return False, None, "Download failed"
+
+        # Post-download verification (Hybrid Mode)
+        # If we wanted to check prompt, but haven't verified it via API yet (because it was missing),
+        # we check the file now.
+        if check_prompt and tag and not prompt_verified_via_api:
+            extractor = PillowPromptExtractor()
+            extracted_prompt, source = extractor.extract_prompt(image_bytes)
+            
+            if not extracted_prompt:
+                # If we couldn't verify via API AND couldn't find prompt in file -> Reject
+                return False, None, "Prompt check failed: No prompt found in API or Image"
+            
+            matcher = TagTextMatcher()
+            if not matcher.matches_text(extracted_prompt, tag):
+                 return False, None, f"Prompt check failed (Image Metadata): {tag}"
+            
+            # If we got here, it matched!
         
         # Detect file extension
         ext = detect_extension(image_bytes)
@@ -292,5 +321,3 @@ class ImageDownloader:
         
         if sorted_count > 0:
             self.logger.info(f"Sorted {sorted_count} images in {directory}")
-
-
