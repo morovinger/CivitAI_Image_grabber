@@ -1052,8 +1052,10 @@ class CivitaiDownloader:
              # --- 5. Finalization ---
              self.logger.info("Run finalization steps...")
              final_option_folder = "" # Determine folder for potential CSV summary
-             if self.mode and self.mode in option_folder_map: # Check if mode is valid before getting folder
-                  final_option_folder = os.path.join(self.output_dir, option_folder_map[self.mode])
+             mode_to_id_type = {'1': 'username', '2': 'model', '3': 'tag', '4': 'modelVersion'}
+             if self.mode and self.mode in mode_to_id_type:
+                  id_type_key = mode_to_id_type[self.mode]
+                  final_option_folder = os.path.join(self.output_dir, option_folder_map[id_type_key])
 
              # Close HTTP client if open
              if self._client and not self._client.is_closed:

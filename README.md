@@ -12,11 +12,7 @@ Second Level is the Model Name with which the image was generated.
 # Installation
 
 
-1.  **Install Python 3** Ensure you have Python 3.8 or newer installed.
-
-```
-install Python3
-```
+1.  **Install Python 3**: Ensure you have Python 3.8 or newer installed. Download from [python.org](https://www.python.org/downloads/)
    
 2.  **Install Dependencies** NEW requirements for users who already use the script
 ```bash
